@@ -1,0 +1,70 @@
+package handlers
+
+import (
+	"context"
+	"github.com/morzik45/go-queue/internal/db"
+	"log/slog"
+	"net/http"
+)
+
+type CountRequest struct {
+	QueueType string      `json:"queue_type"`
+	Key       string      `json:"key"`
+	Value     interface{} `json:"value"`
+}
+
+func (cr CountRequest) Valid(_ context.Context) map[string]string {
+	problems := make(map[string]string)
+	if cr.QueueType == "" {
+		problems["queue_type"] = "field queue_type is required"
+	}
+	if cr.Key == "" {
+		problems["key"] = "field key is required"
+	}
+	if cr.Value == nil {
+		problems["value"] = "field value is required"
+	}
+
+	return problems
+}
+
+type CountResponse struct {
+	Success  bool              `json:"success"`
+	Message  string            `json:"message,omitempty"`
+	Problems map[string]string `json:"problems,omitempty"`
+	Count    int               `json:"count"` // count of items in queue
+}
+
+func Count(store *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resp := CountResponse{}
+		req, problems, err := decodeValid[CountRequest](r)
+		if err != nil {
+			resp.Problems = problems
+			resp.Message = err.Error()
+			if err2 := encode(w, r, http.StatusBadRequest, resp); err2 != nil {
+				slog.Error("count send response error",
+					slog.Any("error", err2),
+					slog.Any("problems", problems),
+					slog.Any("first_error", err))
+			}
+			return
+		}
+
+		var count int64
+		count, err = store.Count(r.Context(), req.QueueType, req.Key, req.Value)
+		var status int
+		if err != nil {
+			resp.Message = err.Error()
+			status = http.StatusInternalServerError
+		} else {
+			resp.Success = true
+			resp.Count = int(count)
+			status = http.StatusOK
+		}
+		err = encode(w, r, status, resp)
+		if err != nil {
+			slog.Error("count send response error", slog.Any("error", err))
+		}
+	}
+}
