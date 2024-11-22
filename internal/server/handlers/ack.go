@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"github.com/morzik45/go-queue/internal/db"
+	"github.com/spf13/viper"
 	"log/slog"
 	"net/http"
 )
 
 type AckRequest struct {
-	ID string `json:"id"`
+	ApiKey string `json:"api_key"`
+	ID     string `json:"id"`
 }
 
 func (ar AckRequest) Valid(_ context.Context) map[string]string {
@@ -26,7 +28,7 @@ type AckResponse struct {
 	Problems map[string]string `json:"problems"`
 }
 
-func Ack(store *db.DB) http.HandlerFunc {
+func Ack(store *db.DB, cfg *viper.Viper) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := AckResponse{}
 		req, problems, err := decodeValid[AckRequest](r)
@@ -35,6 +37,18 @@ func Ack(store *db.DB) http.HandlerFunc {
 			resp.Message = err.Error()
 			if err2 := encode(w, r, http.StatusBadRequest, resp); err2 != nil {
 				slog.Error("acl send response error",
+					slog.Any("error", err2),
+					slog.Any("problems", problems),
+					slog.Any("first_error", err))
+			}
+			return
+		}
+
+		isAuth := checkApiKey(req.ApiKey, cfg)
+		if !isAuth {
+			resp.Message = "invalid api key"
+			if err2 := encode(w, r, http.StatusUnauthorized, resp); err2 != nil {
+				slog.Error("enqueue send response error",
 					slog.Any("error", err2),
 					slog.Any("problems", problems),
 					slog.Any("first_error", err))

@@ -3,11 +3,13 @@ package handlers
 import (
 	"context"
 	"github.com/morzik45/go-queue/internal/db"
+	"github.com/spf13/viper"
 	"log/slog"
 	"net/http"
 )
 
 type EnqueueRequest struct {
+	ApiKey       string                 `json:"api_key"`
 	QueueType    string                 `json:"queue_type"`
 	Priority     int                    `json:"priority,omitempty"`
 	Payload      map[string]interface{} `json:"payload"`
@@ -32,7 +34,7 @@ type EnqueueResponse struct {
 	Problems map[string]string `json:"problems,omitempty"`
 }
 
-func Enqueue(store *db.DB) http.HandlerFunc {
+func Enqueue(store *db.DB, cfg *viper.Viper) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := EnqueueResponse{}
 		req, problems, err := decodeValid[EnqueueRequest](r)
@@ -47,6 +49,19 @@ func Enqueue(store *db.DB) http.HandlerFunc {
 			}
 			return
 		}
+
+		isAuth := checkApiKey(req.ApiKey, cfg)
+		if !isAuth {
+			resp.Message = "invalid api key"
+			if err2 := encode(w, r, http.StatusUnauthorized, resp); err2 != nil {
+				slog.Error("enqueue send response error",
+					slog.Any("error", err2),
+					slog.Any("problems", problems),
+					slog.Any("first_error", err))
+			}
+			return
+		}
+
 		var id string
 		id, err = store.Enqueue(r.Context(), req.QueueType, req.Priority, req.Payload, req.Reevaluation)
 		var status int

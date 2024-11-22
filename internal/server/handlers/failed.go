@@ -3,11 +3,13 @@ package handlers
 import (
 	"context"
 	"github.com/morzik45/go-queue/internal/db"
+	"github.com/spf13/viper"
 	"log/slog"
 	"net/http"
 )
 
 type FailRequest struct {
+	ApiKey       string `json:"api_key"`
 	ID           string `json:"id"`
 	Reevaluation int    `json:"reevaluation,omitempty"`
 	Message      string `json:"message,omitempty"`
@@ -27,7 +29,7 @@ type FailResponse struct {
 	Problems map[string]string `json:"problems"`
 }
 
-func Fail(store *db.DB) http.HandlerFunc {
+func Fail(store *db.DB, cfg *viper.Viper) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := FailResponse{}
 		req, problems, err := decodeValid[FailRequest](r)
@@ -36,6 +38,18 @@ func Fail(store *db.DB) http.HandlerFunc {
 			resp.Message = err.Error()
 			if err2 := encode(w, r, http.StatusBadRequest, resp); err2 != nil {
 				slog.Error("count send response error",
+					slog.Any("error", err2),
+					slog.Any("problems", problems),
+					slog.Any("first_error", err))
+			}
+			return
+		}
+
+		isAuth := checkApiKey(req.ApiKey, cfg)
+		if !isAuth {
+			resp.Message = "invalid api key"
+			if err2 := encode(w, r, http.StatusUnauthorized, resp); err2 != nil {
+				slog.Error("enqueue send response error",
 					slog.Any("error", err2),
 					slog.Any("problems", problems),
 					slog.Any("first_error", err))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 	"net/http"
 )
 
@@ -41,4 +42,12 @@ func decodeValid[T Validator](r *http.Request) (T, map[string]string, error) {
 		return v, problems, fmt.Errorf("invalid %T: %d problems", v, len(problems))
 	}
 	return v, nil, nil
+}
+
+func checkApiKey(apiKey string, cfg *viper.Viper) bool {
+	// TODO: временная реализация, сделать нормальную авторизацию
+	if apiKey == "" || cfg.GetString("api_key") == "" {
+		return false
+	}
+	return apiKey == cfg.GetString("api_key")
 }

@@ -4,12 +4,14 @@ import (
 	"context"
 	"github.com/morzik45/go-queue/internal/db"
 	"github.com/morzik45/go-queue/internal/logs"
+	"github.com/spf13/viper"
 	"log/slog"
 	"net/http"
 	"time"
 )
 
 type DequeueRequest struct {
+	ApiKey     string   `json:"api_key"`
 	QueueTypes []string `json:"queue_types"`
 	Priority   int      `json:"priority,omitempty"`
 	Timeout    int      `json:"timeout"`
@@ -31,7 +33,7 @@ type DequeueResponse struct {
 	Task     map[string]interface{} `json:"task"`
 }
 
-func Dequeue(store *db.DB) http.HandlerFunc {
+func Dequeue(store *db.DB, cfg *viper.Viper) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := DequeueResponse{}
 		req, problems, err := decodeValid[DequeueRequest](r)
@@ -40,6 +42,18 @@ func Dequeue(store *db.DB) http.HandlerFunc {
 			resp.Message = err.Error()
 			if err2 := encode(w, r, http.StatusBadRequest, resp); err2 != nil {
 				slog.Error("ack send response error",
+					slog.Any("error", err2),
+					slog.Any("problems", problems),
+					slog.Any("first_error", err))
+			}
+			return
+		}
+
+		isAuth := checkApiKey(req.ApiKey, cfg)
+		if !isAuth {
+			resp.Message = "invalid api key"
+			if err2 := encode(w, r, http.StatusUnauthorized, resp); err2 != nil {
+				slog.Error("enqueue send response error",
 					slog.Any("error", err2),
 					slog.Any("problems", problems),
 					slog.Any("first_error", err))
