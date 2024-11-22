@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-func run(ctx context.Context, w io.Writer, args []string) error {
+func run(ctx context.Context, _ io.Writer, _ []string) error {
 	config := configs.GetConfig(ctx)
 
 	store, err := db.NewMongoDB(ctx, config.Sub("mongodb"))

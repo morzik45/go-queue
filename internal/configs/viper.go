@@ -12,14 +12,14 @@ func GetConfig(ctx context.Context) *viper.Viper {
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath("/etc/app/")
+	v.AddConfigPath("/opt/app/")
 	v.AddConfigPath(".")
 
 	if err := v.ReadInConfig(); err != nil {
 		panic(err)
 	}
 
-	// Инициализируем логирование (не уверен, что это надо делать тут, но только тут мы получаем env)
+	// Инициализируем логирование (не уверен, что это надо делать тут, но только тут мы получаем config)
 	logs.Init(ctx, v.GetBool("is_dev"), v.Sub("logging"))
 
 	v.OnConfigChange(func(e fsnotify.Event) {
